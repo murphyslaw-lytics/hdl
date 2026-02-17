@@ -103,10 +103,15 @@ export async function POST(req: NextRequest) {
 
   // For demos, return what you’d send onward if debug=1
   const debug = req.nextUrl.searchParams.get("debug") === "1";
-  if (debug) {
-    return corsJson(req, { ok: true, enriched }, 200);
-  }
+if (debug) {
+  // Create a safe copy for demo/debug output
+  const debugEnriched = { ...enriched };
 
+  // Remove sensitive or distracting fields
+  delete debugEnriched.ip;
+
+  return corsJson(req, { ok: true, enriched: debugEnriched }, 200);
+}
   // TODO: forward to Lytics here (server-to-server)
   // Keep this stubbed for now so the demo layer is safe to deploy.
   return corsJson(req, { ok: true }, 200);
