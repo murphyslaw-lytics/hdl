@@ -10,8 +10,8 @@ const ALLOWED_ORIGINS = new Set<string>([
 // Demo-grade per-site keys.
 // In Launch, you can also put these into env vars instead.
 const SITE_KEYS: Record<string, string> = {
-  site_a: "demo-site-a-key",
-  site_b: "demo-site-b-key",
+  contentstack_site_a: "cs-demo-a-123",
+  contentstack_site_b: "cs-demo-b-456"
 };
 
 type Incoming = {
