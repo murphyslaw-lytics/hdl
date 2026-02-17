@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_ORIGINS = new Set<string>([
   // Add your demo sites here:
-  "https://domain-a.com",
-  "https://domain-b.com",
+  "https://30rpr-lego-poc.contentstackapps.com",
   "http://localhost:3000",
 ]);
 
