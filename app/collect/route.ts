@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
     ...(input.props || {}),
   };
 
-  // ✅ Sheets enrichment (campaign lookup)
-  // Expects your Google Apps Script / JSON endpoint to return:
-  // - either an array of rows
-  // - or { records: [...] }
+    // For demos, return what you’d send onward if debug=1
+  const debug = req.nextUrl.searchParams.get("debug") === "1";
+
+  // ✅ Sheets enrichment (campaign lookup) + diagnostics when debug=1
   try {
     const campaigns = await getCampaignRows();
     const match = findCampaign(campaigns, enriched.utm_campaign);
@@ -123,12 +123,25 @@ export async function POST(req: NextRequest) {
             : !!match.enabled,
       };
     }
-  } catch {
-    // swallow errors for demo stability (optional)
+
+    if (debug) {
+      enriched.__campaign_debug = {
+        lookup_key: enriched.utm_campaign,
+        campaigns_count: campaigns.length,
+        sample_keys: campaigns[0] ? Object.keys(campaigns[0]) : [],
+        first_row: campaigns[0] || null,
+        match_found: !!match,
+      };
+    }
+  } catch (e: any) {
+    if (debug) {
+      enriched.__campaign_debug = {
+        lookup_key: enriched.utm_campaign,
+        error: e?.message || String(e),
+      };
+    }
   }
 
-  // For demos, return what you’d send onward if debug=1
-  const debug = req.nextUrl.searchParams.get("debug") === "1";
   if (debug) {
     const debugEnriched = { ...enriched };
     delete debugEnriched.ip;
@@ -188,11 +201,13 @@ function corsJson(req: NextRequest, body: any, status = 200) {
 type CampaignRow = {
   utm_campaign?: string;
   country?: string;
-  campaign_start_date?: string;
-  campaign_end_date?: string;
-  marketing_platform?: string;
-  campaign_cost?: string;
+  experience?: string;
+  priority?: string | number;
+  start_date?: string;
+  end_date?: string;
+  enabled?: string | boolean;
 };
+
 
 let CAMPAIGNS_CACHE: { expiresAt: number; rows: CampaignRow[] } | null = null;
 
