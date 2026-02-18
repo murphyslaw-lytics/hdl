@@ -148,6 +148,24 @@ export async function POST(req: NextRequest) {
     return corsJson(req, { ok: true, enriched: debugEnriched }, 200);
   }
 
+  // Forward enriched event to Lytics (server-to-server)
+  const stream = process.env.LYTICS_STREAM || "default";
+  const apiKey = process.env.LYTICS_API_KEY;
+
+  if (apiKey) {
+    const dryrun = req.nextUrl.searchParams.get("dryrun") === "1";
+
+    await fetch(`https://api.lytics.io/collect/json/${encodeURIComponent(stream)}${dryrun ? "?dryrun=true" : ""}`, {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(enriched),
+    });
+  }
+
   // TODO: forward to Lytics here (server-to-server)
   return corsJson(req, { ok: true }, 200);
 }
