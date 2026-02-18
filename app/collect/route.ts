@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiKey}`, // ✅ IMPORTANT
+            Authorization: apiKey, // ✅ IMPORTANT
             "Content-Type": "application/json",
             Accept: "application/json",
           },
