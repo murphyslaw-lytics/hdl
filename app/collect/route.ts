@@ -142,30 +142,57 @@ export async function POST(req: NextRequest) {
     }
   }
 
+    // Forward enriched event to Lytics (server-to-server)
+  const stream = process.env.LYTICS_STREAM || "default";
+  const apiKey = process.env.LYTICS_API_KEY;
+  const dryrun = req.nextUrl.searchParams.get("dryrun") === "1";
+
+  if (apiKey) {
+    try {
+      const lyticsRes = await fetch(
+        `https://api.lytics.io/collect/json/${encodeURIComponent(stream)}${
+          dryrun ? "?dryrun=true" : ""
+        }`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`, // ✅ IMPORTANT
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(enriched),
+        }
+      );
+
+      const lyticsText = await lyticsRes.text();
+
+      if (debug) {
+        enriched.__lytics_debug = {
+          ok: lyticsRes.ok,
+          status: lyticsRes.status,
+          response: lyticsText.slice(0, 200),
+        };
+      }
+    } catch (e: any) {
+      if (debug) {
+        enriched.__lytics_debug = {
+          ok: false,
+          error: e?.message || String(e),
+        };
+      }
+    }
+  } else if (debug) {
+    enriched.__lytics_debug = {
+      ok: false,
+      error: "Missing LYTICS_API_KEY env var",
+    };
+  }
+
   if (debug) {
     const debugEnriched = { ...enriched };
     delete debugEnriched.ip;
     return corsJson(req, { ok: true, enriched: debugEnriched }, 200);
   }
-
-  // Forward enriched event to Lytics (server-to-server)
-  const stream = process.env.LYTICS_STREAM || "default";
-  const apiKey = process.env.LYTICS_API_KEY;
-
-  if (apiKey) {
-    const dryrun = req.nextUrl.searchParams.get("dryrun") === "1";
-
-    await fetch(`https://api.lytics.io/collect/json/${encodeURIComponent(stream)}${dryrun ? "?dryrun=true" : ""}`, {
-      method: "POST",
-      headers: {
-        Authorization: apiKey,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(enriched),
-    });
-  }
-
   // TODO: forward to Lytics here (server-to-server)
   return corsJson(req, { ok: true }, 200);
 }
