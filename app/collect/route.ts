@@ -113,10 +113,14 @@ export async function POST(req: NextRequest) {
       enriched.campaign = {
         utm_campaign: match.utm_campaign,
         country: match.country,
-        start: match.campaign_start_date,
-        end: match.campaign_end_date,
-        platform: match.marketing_platform,
-        cost: match.campaign_cost,
+        experience: match.experience,
+        priority: match.priority,
+        start_date: match.start_date,
+        end_date: match.end_date,
+        enabled:
+          typeof match.enabled === "string"
+            ? match.enabled.toLowerCase() === "true"
+            : !!match.enabled,
       };
     }
   } catch {
