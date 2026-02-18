@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_ORIGINS = new Set<string>([
-  // Add your demo sites here:
   "https://30rpr-lego-poc.contentstackapps.com",
   "http://localhost:3000",
 ]);
 
-// Demo-grade per-site keys.
-// In Launch, you can also put these into env vars instead.
 const SITE_KEYS: Record<string, string> = {
   contentstack_site_a: "cs-demo-a-123",
-  contentstack_site_b: "cs-demo-b-456"
+  contentstack_site_b: "cs-demo-b-456",
 };
 
 type Incoming = {
@@ -42,7 +39,10 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin") || "";
   if (!isAllowedOrigin(origin)) {
-    return NextResponse.json({ ok: false, error: "Origin not allowed" }, { status: 403 });
+    return NextResponse.json(
+      { ok: false, error: "Origin not allowed" },
+      { status: 403 }
+    );
   }
 
   const siteId = req.headers.get("x-dl-site") || "";
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     undefined;
 
   // Canonical event shape your whole org will standardise on
-  const enriched = {
+  const enriched: any = {
     event: input.event,
     ts: input.ts || Date.now(),
     site_id: siteId,
@@ -101,19 +101,37 @@ export async function POST(req: NextRequest) {
     ...(input.props || {}),
   };
 
+  // ✅ Sheets enrichment (campaign lookup)
+  // Expects your Google Apps Script / JSON endpoint to return:
+  // - either an array of rows
+  // - or { records: [...] }
+  try {
+    const campaigns = await getCampaignRows();
+    const match = findCampaign(campaigns, enriched.utm_campaign);
+
+    if (match) {
+      enriched.campaign = {
+        utm_campaign: match.utm_campaign,
+        country: match.country,
+        start: match.campaign_start_date,
+        end: match.campaign_end_date,
+        platform: match.marketing_platform,
+        cost: match.campaign_cost,
+      };
+    }
+  } catch {
+    // swallow errors for demo stability (optional)
+  }
+
   // For demos, return what you’d send onward if debug=1
   const debug = req.nextUrl.searchParams.get("debug") === "1";
-if (debug) {
-  // Create a safe copy for demo/debug output
-  const debugEnriched = { ...enriched };
+  if (debug) {
+    const debugEnriched = { ...enriched };
+    delete debugEnriched.ip;
+    return corsJson(req, { ok: true, enriched: debugEnriched }, 200);
+  }
 
-  // Remove sensitive or distracting fields
-  delete debugEnriched.ip;
-
-  return corsJson(req, { ok: true, enriched: debugEnriched }, 200);
-}
   // TODO: forward to Lytics here (server-to-server)
-  // Keep this stubbed for now so the demo layer is safe to deploy.
   return corsJson(req, { ok: true }, 200);
 }
 
@@ -139,7 +157,10 @@ function corsEmpty(req: NextRequest, status = 204) {
     res.headers.set("Access-Control-Allow-Origin", origin);
     res.headers.set("Vary", "Origin");
     res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.headers.set("Access-Control-Allow-Headers", "content-type, x-dl-site, x-dl-key");
+    res.headers.set(
+      "Access-Control-Allow-Headers",
+      "content-type, x-dl-site, x-dl-key"
+    );
     res.headers.set("Access-Control-Max-Age", "86400");
   }
   return res;
@@ -153,4 +174,45 @@ function corsJson(req: NextRequest, body: any, status = 200) {
     res.headers.set("Vary", "Origin");
   }
   return res;
+}
+
+/** ---------------------------
+ *  Google Sheets enrichment
+ *  ---------------------------
+ */
+
+type CampaignRow = {
+  utm_campaign?: string;
+  country?: string;
+  campaign_start_date?: string;
+  campaign_end_date?: string;
+  marketing_platform?: string;
+  campaign_cost?: string;
+};
+
+let CAMPAIGNS_CACHE: { expiresAt: number; rows: CampaignRow[] } | null = null;
+
+async function getCampaignRows(): Promise<CampaignRow[]> {
+  const now = Date.now();
+  if (CAMPAIGNS_CACHE && CAMPAIGNS_CACHE.expiresAt > now) return CAMPAIGNS_CACHE.rows;
+
+  const url = process.env.HDL_CAMPAIGNS_JSON_URL;
+  if (!url) return [];
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const rows: CampaignRow[] = Array.isArray(data) ? data : data.records || [];
+
+  CAMPAIGNS_CACHE = { rows, expiresAt: now + 60_000 }; // cache 60s
+  return rows;
+}
+
+function findCampaign(rows: CampaignRow[], utm_campaign?: string) {
+  if (!utm_campaign) return null;
+  const key = utm_campaign.trim().toLowerCase();
+  return (
+    rows.find((r) => (r.utm_campaign || "").trim().toLowerCase() === key) || null
+  );
 }
