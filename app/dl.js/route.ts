@@ -21,13 +21,15 @@ export async function GET() {
     catch (e) { return {}; }
   }
 
-  var state = { endpoint: null, siteId: null, key: null, base: {} };
+  // ✅ add hdlEndpoint + hdl
+  var state = { endpoint: null, siteId: null, key: null, base: {}, hdlEndpoint: null, hdl: null };
 
   function init(cfg) {
     state.endpoint = cfg.endpoint;
     state.siteId = cfg.siteId;
     state.key = cfg.writeKey;
     state.base = cfg.base || {};
+    state.hdlEndpoint = cfg.hdlEndpoint || "/api/hdl"; // ✅
   }
 
   function track(event, props, extra) {
@@ -48,6 +50,9 @@ export async function GET() {
         utm: getUtm(),
       },
       content: (extra && extra.content) || state.base.content,
+
+      // ✅ attach latest decision output (optional)
+      hdl: (extra && extra.hdl) || state.hdl || undefined
     };
 
     fetch(state.endpoint, {
@@ -63,7 +68,48 @@ export async function GET() {
     }).catch(function(){});
   }
 
-  window.dl = { init: init, track: track };
+  // NEW
+  function enrich(extra) {
+    if (!state.hdlEndpoint || !state.siteId || !state.key) return Promise.resolve(null);
+
+    var body = {
+      path: (extra && extra.path) || window.location.pathname,
+      url: window.location.href,
+      referrer: document.referrer || undefined,
+      title: document.title || undefined,
+      utm: getUtm(),
+      lang: (navigator.language || undefined)
+    };
+
+    return fetch(state.hdlEndpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-dl-site": state.siteId,
+        "x-dl-key": state.key
+      },
+      body: JSON.stringify(body),
+      mode: "cors",
+      keepalive: true
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        state.hdl = res && res.ok ? res : null;
+        return state.hdl;
+      })
+      .catch(function(){ return null; });
+  }
+
+  // ✅ optional helper: enrich then track a page_view
+  function auto() {
+    return enrich().then(function(hdl){
+      track("page_view", {}, { hdl: hdl });
+      return hdl;
+    });
+  }
+
+  // ✅ export enrich (+ auto if you want)
+  window.dl = { init: init, track: track, enrich: enrich, auto: auto };
 })();
 `;
 

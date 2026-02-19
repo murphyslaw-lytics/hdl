@@ -7,14 +7,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
 
-        {/* 1) Load your hosted data layer client from demoinbox.com */}
         <Script
           id="demoinbox-dl"
           src="https://hdl.contentstackapps.com/dl.js"
           strategy="afterInteractive"
         />
 
-        {/* 2) Initialise it once it’s available */}
         <Script
           id="demoinbox-dl-init"
           strategy="afterInteractive"
@@ -24,17 +22,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   function initWhenReady() {
     if (!window.dl) return false;
 
+    // prevent accidental double init
+    if (window.__dl_inited) return true;
+    window.__dl_inited = true;
+
     window.dl.init({
       endpoint: "https://hdl.contentstackapps.com/collect?debug=1",
-      siteId: "https://30rpr-lego-poc.contentstackapps.com",
+      hdlEndpoint: "https://hdl.contentstackapps.com/api/hdl",
+      siteId: "contentstack_site_a",
       writeKey: "cs-demo-a-123",
       base: { consent: { analytics: true } }
     });
 
-    // Optional: fire one test event so you can see it in Network immediately
-    window.dl.track("page_view", { auto: true });
+    window.dl.auto(); // enrich + page_view
 
-    console.log("[DL] initialised on site_a");
+    console.log("[DL] initialised with URL-driven HDL");
     return true;
   }
 
