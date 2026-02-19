@@ -11,6 +11,7 @@ const SITE_KEYS: Record<string, string> = {
 };
 
 type Incoming = {
+  hdl?: any;
   event: string;
   ts?: number;
   props?: Record<string, any>;
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
     ip,
 
     ...(input.props || {}),
+    hdl: input.hdl, // ✅ keep the HDL decision payload
   };
 
     // For demos, return what you’d send onward if debug=1
